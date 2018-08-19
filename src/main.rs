@@ -20,15 +20,15 @@ fn get_current_mode() {
             let display = CGDisplay::new(display_id);
             let cgmode = display.display_mode().unwrap();
             println!(
-                "Display {}: {}x{}, pixel {}x{}, refresh rate: {}",
+                "Display {}: {}x{}, pixel {}x{}, refresh rate: {}, flags: {}, bitDepth: {}",
                 i,
                 cgmode.width(),
                 cgmode.height(),
                 cgmode.pixel_width(),
                 cgmode.pixel_height(),
                 cgmode.refresh_rate(),
-                // cgmode.io_flags(),
-                // cgmode.pixel_encoding()
+                cgmode.io_flags(),
+                cgmode.bit_depth()
             );
         });
 }
