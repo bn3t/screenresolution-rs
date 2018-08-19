@@ -5,7 +5,7 @@ authors = ["Bernard Niset <bernard.niset@gmail.com>"]
 
 [dependencies]
 libc = "0.2"
-core-graphics = "0.17.0"
-core-foundation = "0.6.1"
+core-graphics = {path = "../core-foundation-rs/core-graphics", version="0.17.0"}
+core-foundation = {path="../core-foundation-rs/core-foundation", version="0.6.1"}
 foreign-types = "0.3.0"
 clap = "2.32.0"
