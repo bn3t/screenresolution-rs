@@ -1,0 +1,11 @@
+[package]
+name = "screenresolution-rs"
+version = "0.1.0"
+authors = ["Bernard Niset <bernard.niset@gmail.com>"]
+
+[dependencies]
+libc = "0.2"
+core-graphics = "0.17.0"
+core-foundation = "0.6.1"
+foreign-types = "0.3.0"
+clap = "2.32.0"
