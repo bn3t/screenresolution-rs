@@ -87,11 +87,20 @@ fn list_modes() {
 
 fn main() {
     let matches = App::new("MacOS Screen Resolution Tool")
-        .version("1.0")
+        .version("0.1.0")
         .author("Bernard Niset")
         .about("Allows to list, get and set screen resolutions.")
-        .subcommand(SubCommand::with_name("list"))
-        .subcommand(SubCommand::with_name("get"))
+        .subcommand(
+            SubCommand::with_name("list").about("List available resolutions for current display"),
+        )
+        .subcommand(
+            SubCommand::with_name("get")
+                .about("Get current active resution for current display (TODO)"),
+        )
+        .subcommand(
+            SubCommand::with_name("set")
+                .about("Set current active resution for current display (TODO)"),
+        )
         .get_matches();
     match matches.subcommand() {
         ("list", Some(_sub_m)) => {
