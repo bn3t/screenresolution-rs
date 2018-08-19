@@ -17,7 +17,7 @@ use core_foundation::dictionary::CFDictionaryRef;
 use core_foundation::string::{CFString, CFStringRef};
 use core_graphics::display::{CGDirectDisplayID, CGDisplay};
 
-use clap::{App, Arg, SubCommand};
+use clap::{App, SubCommand};
 
 mod cg {
     pub enum CGDisplayMode {}
@@ -33,11 +33,33 @@ foreign_type! {
     pub struct CGDisplayModeRef;
 }
 
-fn list_modes() {
+fn get_current_mode() {
     println!(
         "Active display count: {}",
         CGDisplay::active_display_count().unwrap()
     );
+    let displays = CGDisplay::active_displays().unwrap();
+    displays
+        .into_iter()
+        .enumerate()
+        .for_each(|(i, display_id)| {
+            let display = CGDisplay::new(display_id);
+            let cgmode = display.display_mode().unwrap();
+            println!(
+                "Display {}: {}x{}, pixel {}x{}, refresh rate: {}",
+                i,
+                cgmode.width(),
+                cgmode.height(),
+                cgmode.pixel_width(),
+                cgmode.pixel_height(),
+                cgmode.refresh_rate(),
+                // cgmode.io_flags(),
+                // cgmode.pixel_encoding()
+            );
+        });
+}
+
+fn list_modes() {
     let vec = CGDisplay::active_displays().unwrap();
     for display_id in vec.clone() {
         println!("active display id: {}", display_id);
@@ -71,18 +93,6 @@ fn list_modes() {
             cgmode.pixel_encoding()
         );
     });
-
-    // println!("Number of modes {}", modes.len());
-    // // let values = modes.into_untyped();
-    // let value_opt_0 = modes.get(0);
-    // let value0 = value_opt_0.unwrap();
-    // let x = *value0.deref() as *mut cg::CGDisplayMode;
-    // let cgmode = unsafe { CGDisplayMode::from_ptr(x) };
-    // println!("{}", cgmode.width());
-    //println!("{:?}", modes.get(0).unwrap().deref())
-    // for mode in modes.iter() {
-    //     println!("mode {}", mode);
-    // }
 }
 
 fn main() {
@@ -106,7 +116,7 @@ fn main() {
         ("list", Some(_sub_m)) => {
             list_modes();
         }
-        ("get", Some(_sub_m)) => println!("Get"),
+        ("get", Some(_sub_m)) => get_current_mode(),
         _ => {}
     }
 }
