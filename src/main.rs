@@ -3,7 +3,11 @@ extern crate core_foundation;
 extern crate core_graphics;
 extern crate libc;
 
-use core_graphics::display::{CGDisplay, CGDisplayMode};
+use core_foundation::base::TCFType;
+use core_foundation::dictionary::CFDictionary;
+use core_foundation::number::CFNumber;
+use core_foundation::string::CFString;
+use core_graphics::display::{kCGDisplayShowDuplicateLowResolutionModes, CGDisplay, CGDisplayMode};
 
 use clap::{App, SubCommand};
 
@@ -34,10 +38,22 @@ fn get_current_mode() {
 }
 
 fn list_modes() {
+    /*
+        int value = 1;
+    CFNumberRef number = CFNumberCreate( kCFAllocatorDefault, kCFNumberIntType, &value );
+    CFStringRef key = kCGDisplayShowDuplicateLowResolutionModes;
+    CFDictionaryRef options = CFDictionaryCreate( kCFAllocatorDefault, (const void **)&key, (const void **)&number, 1, NULL, NULL );
+
+    */
+    let value = CFNumber::from(1);
+    let key = unsafe { CFString::wrap_under_get_rule(kCGDisplayShowDuplicateLowResolutionModes) };
+    let options = CFDictionary::from_CFType_pairs(&[(key.as_CFType(), value.as_CFType())]);
+
     let displays = CGDisplay::active_displays().unwrap();
 
     displays.into_iter().enumerate().for_each(|(i, display)| {
-        let array_opt: Option<Vec<CGDisplayMode>> = CGDisplayMode::all_display_modes(display);
+        let array_opt: Option<Vec<CGDisplayMode>> =
+            CGDisplayMode::all_display_modes(display, options.as_concrete_TypeRef());
         let modes = array_opt.unwrap();
 
         modes.into_iter().for_each(|cgmode| {
