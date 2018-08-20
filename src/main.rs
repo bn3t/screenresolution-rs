@@ -38,13 +38,6 @@ fn get_current_mode() {
 }
 
 fn list_modes() {
-    /*
-        int value = 1;
-    CFNumberRef number = CFNumberCreate( kCFAllocatorDefault, kCFNumberIntType, &value );
-    CFStringRef key = kCGDisplayShowDuplicateLowResolutionModes;
-    CFDictionaryRef options = CFDictionaryCreate( kCFAllocatorDefault, (const void **)&key, (const void **)&number, 1, NULL, NULL );
-
-    */
     let value = CFNumber::from(1);
     let key = unsafe { CFString::wrap_under_get_rule(kCGDisplayShowDuplicateLowResolutionModes) };
     let options = CFDictionary::from_CFType_pairs(&[(key.as_CFType(), value.as_CFType())]);
