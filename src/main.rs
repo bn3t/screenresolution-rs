@@ -175,6 +175,12 @@ fn obtain_all_modes_for_all_displays() -> Vec<Mode> {
                 });
             });
         });
+    result.sort_unstable_by(|a, b| {
+        a.display
+            .cmp(&(b.display))
+            .then(a.width.cmp(&(b.width)))
+            .then(a.height.cmp(&(b.height)))
+    });
     result
 }
 
