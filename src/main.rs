@@ -14,7 +14,7 @@ use core_graphics::display::{
     kCGDisplayShowDuplicateLowResolutionModes, CGConfigureOption, CGDisplay, CGDisplayMode,
 };
 
-use clap::{App, Arg, SubCommand};
+use clap::{App, AppSettings, Arg, SubCommand};
 
 struct Mode {
     display: u64,
@@ -27,7 +27,33 @@ struct Mode {
     bit_depth: usize,
 }
 
-fn get_current_mode() {
+fn print_mode(
+    short: bool,
+    display: u32,
+    width: u64,
+    height: u64,
+    pixel_width: u64,
+    pixel_height: u64,
+    refresh_rate: f64,
+    bit_depth: usize,
+    _io_flags: u32,
+) {
+    if short {
+        let mode = format!("{}x{}x{}@{}", width, height, bit_depth, refresh_rate);
+        let mode_pixel = format!(
+            "{}x{}x{}@{}",
+            pixel_width, pixel_height, bit_depth, refresh_rate
+        );
+        println!("Display {}: {:15} - pixel {:15}", display, mode, mode_pixel);
+    } else {
+        println!(
+            "Display {}: {}x{}, pixel {}x{}, refresh rate: {}, bitDepth: {}",
+            display, width, height, pixel_width, pixel_height, refresh_rate, bit_depth
+        );
+    }
+}
+
+fn get_current_mode(short: bool) {
     println!(
         "Active display count: {}",
         CGDisplay::active_display_count().unwrap()
@@ -39,16 +65,16 @@ fn get_current_mode() {
         .for_each(|(i, display_id)| {
             let display = CGDisplay::new(display_id);
             let cgmode = display.display_mode().unwrap();
-            println!(
-                "Display {}: {}x{}, pixel {}x{}, refresh rate: {}, flags: {}, bitDepth: {}",
-                i,
+            print_mode(
+                short,
+                i as u32,
                 cgmode.width(),
                 cgmode.height(),
                 cgmode.pixel_width(),
                 cgmode.pixel_height(),
                 cgmode.refresh_rate(),
+                cgmode.bit_depth(),
                 cgmode.io_flags(),
-                cgmode.bit_depth()
             );
         });
 }
@@ -178,42 +204,60 @@ fn obtain_all_modes_for_all_displays() -> Vec<Mode> {
     result.sort_unstable_by(|a, b| {
         a.display
             .cmp(&(b.display))
-            .then(a.width.cmp(&(b.width)))
-            .then(a.height.cmp(&(b.height)))
+            .then(a.width.cmp(&(b.width)).reverse())
+            .then(a.height.cmp(&(b.height)).reverse())
     });
     result
 }
 
-fn list_modes() {
+fn list_modes(short: bool) {
     obtain_all_modes_for_all_displays()
         .into_iter()
         .for_each(|cgmode| {
-            println!(
-                "Display {}: {}x{}, pixel {}x{}, refresh rate: {}, flags: {}, bitDepth: {}",
-                cgmode.display,
+            print_mode(
+                short,
+                cgmode.display as u32,
                 cgmode.width,
                 cgmode.height,
                 cgmode.pixel_width,
                 cgmode.pixel_height,
                 cgmode.refresh_rate,
+                cgmode.bit_depth,
                 cgmode.io_flags,
-                cgmode.bit_depth
             );
         });
 }
 
 fn main() {
     let matches = App::new("MacOS Screen Resolution Tool")
-        .version("0.1.0")
+        .version(env!("CARGO_PKG_VERSION"))
         .author("Bernard Niset")
-        .about("Allows to list, get and set screen resolutions.")
+        .about(env!("CARGO_PKG_DESCRIPTION"))
+        .setting(AppSettings::SubcommandRequiredElseHelp)
+        .after_help(format!("Build: {} - {}", env!("GIT_COMMIT"), env!("BUILD_DATE")).as_str())
         .subcommand(
-            SubCommand::with_name("list").about("List available resolutions for current display"),
+            SubCommand::with_name("list")
+                .about("List available resolutions for current display")
+                .arg(
+                    Arg::with_name("short")
+                        .long("short")
+                        .short("s")
+                        .required(false)
+                        .takes_value(false),
+                ),
         ).subcommand(
-            SubCommand::with_name("get").about("Get current active resution for current display"),
+            SubCommand::with_name("get")
+                .about("Get current active resution for current display")
+                .arg(
+                    Arg::with_name("short")
+                        .long("short")
+                        .short("s")
+                        .required(false)
+                        .takes_value(false),
+                ),
         ).subcommand(
             SubCommand::with_name("set")
-                .about("Set current active resolution for current display (TODO)")
+                .about("Set current active resolution for current display")
                 .arg(
                     Arg::with_name("display")
                         .long("display")
@@ -229,10 +273,14 @@ fn main() {
                 ),
         ).get_matches();
     match matches.subcommand() {
-        ("list", Some(_sub_m)) => {
-            list_modes();
+        ("list", Some(sub_m)) => {
+            let short = sub_m.is_present("short");
+            list_modes(short);
         }
-        ("get", Some(_sub_m)) => get_current_mode(),
+        ("get", Some(sub_m)) => {
+            let short = sub_m.is_present("short");
+            get_current_mode(short);
+        }
         ("set", Some(sub_m)) => {
             let display = sub_m
                 .value_of("display")
