@@ -1,3 +1,7 @@
+#![recursion_limit = "1024"]
+#[macro_use]
+extern crate error_chain;
+
 extern crate clap;
 extern crate core_foundation;
 extern crate core_graphics;
@@ -10,11 +14,61 @@ use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
+
 use core_graphics::display::{
     kCGDisplayShowDuplicateLowResolutionModes, CGConfigureOption, CGDisplay, CGDisplayMode,
 };
 
 use clap::{App, AppSettings, Arg, SubCommand};
+
+mod errors {
+    use core_graphics::base;
+    use std::error;
+    use std::fmt;
+    use std::result;
+
+    #[derive(Debug)]
+    pub struct CGError {
+        error: base::CGError,
+    }
+
+    impl error::Error for CGError {
+        fn description(&self) -> &str {
+            "a CG error"
+        }
+
+        fn cause(&self) -> Option<&error::Error> {
+            None
+        }
+    }
+
+    impl fmt::Display for CGError {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "CGError: {}", self)
+        }
+    }
+
+    impl From<base::CGError> for CGError {
+        fn from(e: base::CGError) -> Self {
+            CGError { error: e }
+        }
+    }
+
+    // Create the Error, ErrorKind, ResultExt, and Result types
+    error_chain!{
+        foreign_links {
+            CgError(CGError);
+        }
+    }
+
+    pub fn convert_result<T>(
+        result: result::Result<T, base::CGError>,
+    ) -> result::Result<T, CGError> {
+        result.map_err(|e: base::CGError| CGError { error: e })
+    }
+}
+
+use errors::*;
 
 struct Mode {
     display: u64,
@@ -53,12 +107,14 @@ fn print_mode(
     }
 }
 
-fn get_current_mode(short: bool) {
+fn get_current_mode(short: bool) -> Result<()> {
     println!(
         "Active display count: {}",
-        CGDisplay::active_display_count().unwrap()
+        convert_result(CGDisplay::active_display_count())
+            .chain_err(|| "Could not get active display count")?
     );
-    let displays = CGDisplay::active_displays().unwrap();
+    let displays = convert_result(CGDisplay::active_displays())
+        .chain_err(|| "Could not list active displays")?;
     displays
         .into_iter()
         .enumerate()
@@ -77,24 +133,25 @@ fn get_current_mode(short: bool) {
                 cgmode.io_flags(),
             );
         });
+    Ok(())
 }
 
-fn set_current_mode(mode: &str, display: u64) {
-    println!("Setting mode: {}, display: {}", mode, display);
+fn set_current_mode(mode: &str, display: u64) -> Result<()> {
+    // println!("Setting mode: {}, display: {}", mode, display);
 
     // Parse: in the style of 1920x1200x32@0
-    let re = Regex::new(r"(\d+)x(\d+)x(\d+)@(\d+)").unwrap();
+    let re = Regex::new(r"(\d+)x(\d+)x(\d+)@(\d+)").chain_err(|| "Could not compile regex")?;
     let captures = re.captures(mode);
     let wanted_mode = match captures {
         Some(caps) => {
-            println!(
-                "Display: {}: width: {}, height: {}, bitdepth: {}, refresh: {}",
-                display,
-                caps.get(1).unwrap().as_str(),
-                caps.get(2).unwrap().as_str(),
-                caps.get(3).unwrap().as_str(),
-                caps.get(4).unwrap().as_str()
-            );
+            // println!(
+            //     "Display: {}: width: {}, height: {}, bitdepth: {}, refresh: {}",
+            //     display,
+            //     caps.get(1).unwrap().as_str(),
+            //     caps.get(2).unwrap().as_str(),
+            //     caps.get(3).unwrap().as_str(),
+            //     caps.get(4).unwrap().as_str()
+            // );
             Some(Mode {
                 display: display,
                 width: caps.get(1).unwrap().as_str().parse().unwrap(),
@@ -106,10 +163,7 @@ fn set_current_mode(mode: &str, display: u64) {
                 bit_depth: caps.get(3).unwrap().as_str().parse().unwrap(),
             })
         }
-        None => {
-            println!("No match");
-            None
-        }
+        None => None,
     };
     if let Some(wanted_mode) = wanted_mode {
         let value = CFNumber::from(1);
@@ -168,17 +222,23 @@ fn set_current_mode(mode: &str, display: u64) {
                     }
                 }
             }
+            Ok(())
+        } else {
+            Err(format!("Not a valid display: {}", display).into())
         }
+    } else {
+        Err(format!("Not a valid mode: {}", mode).into())
     }
 }
 
-fn obtain_all_modes_for_all_displays() -> Vec<Mode> {
+fn obtain_all_modes_for_all_displays() -> Result<Vec<Mode>> {
     let mut result: Vec<Mode> = Vec::with_capacity(50);
     let value = CFNumber::from(1);
     let key = unsafe { CFString::wrap_under_get_rule(kCGDisplayShowDuplicateLowResolutionModes) };
     let options = CFDictionary::from_CFType_pairs(&[(key.as_CFType(), value.as_CFType())]);
 
-    let display_ids = CGDisplay::active_displays().unwrap();
+    let display_ids = convert_result(CGDisplay::active_displays())
+        .chain_err(|| "Unable to list active displays")?;
 
     display_ids
         .into_iter()
@@ -207,28 +267,28 @@ fn obtain_all_modes_for_all_displays() -> Vec<Mode> {
             .then(a.width.cmp(&(b.width)).reverse())
             .then(a.height.cmp(&(b.height)).reverse())
     });
-    result
+    Ok(result)
 }
 
-fn list_modes(short: bool) {
-    obtain_all_modes_for_all_displays()
-        .into_iter()
-        .for_each(|cgmode| {
-            print_mode(
-                short,
-                cgmode.display as u32,
-                cgmode.width,
-                cgmode.height,
-                cgmode.pixel_width,
-                cgmode.pixel_height,
-                cgmode.refresh_rate,
-                cgmode.bit_depth,
-                cgmode.io_flags,
-            );
-        });
+fn list_modes(short: bool) -> Result<()> {
+    let all_modes = obtain_all_modes_for_all_displays()?;
+    all_modes.into_iter().for_each(|cgmode| {
+        print_mode(
+            short,
+            cgmode.display as u32,
+            cgmode.width,
+            cgmode.height,
+            cgmode.pixel_width,
+            cgmode.pixel_height,
+            cgmode.refresh_rate,
+            cgmode.bit_depth,
+            cgmode.io_flags,
+        );
+    });
+    Ok(())
 }
 
-fn main() {
+fn run() -> Result<()> {
     let matches = App::new("MacOS Screen Resolution Tool")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Bernard Niset")
@@ -275,11 +335,11 @@ fn main() {
     match matches.subcommand() {
         ("list", Some(sub_m)) => {
             let short = sub_m.is_present("short");
-            list_modes(short);
+            list_modes(short)
         }
         ("get", Some(sub_m)) => {
             let short = sub_m.is_present("short");
-            get_current_mode(short);
+            get_current_mode(short)
         }
         ("set", Some(sub_m)) => {
             let display = sub_m
@@ -288,8 +348,10 @@ fn main() {
                 .parse::<u64>()
                 .unwrap_or(0);
 
-            set_current_mode(sub_m.value_of("resolution").unwrap(), display);
+            set_current_mode(sub_m.value_of("resolution").unwrap(), display)
         }
-        _ => {}
+        _ => Ok(()),
     }
 }
+
+quick_main!(run);
