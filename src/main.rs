@@ -16,7 +16,8 @@ use core_foundation::number::CFNumber;
 use core_foundation::string::CFString;
 
 use core_graphics::display::{
-    kCGDisplayShowDuplicateLowResolutionModes, CGConfigureOption, CGDisplay, CGDisplayMode,
+    kCGDisplayShowDuplicateLowResolutionModes, kDisplayModeSafeFlag, kDisplayModeValidFlag,
+    CGConfigureOption, CGDisplay, CGDisplayMode,
 };
 
 use clap::{App, AppSettings, Arg, SubCommand};
@@ -90,19 +91,37 @@ fn print_mode(
     pixel_height: u64,
     refresh_rate: f64,
     bit_depth: usize,
-    _io_flags: u32,
+    io_flags: u32,
 ) {
+    let hidpi = match width != pixel_width || height != pixel_height {
+        true => "HiDPI",
+        false => "",
+    };
+    let f16_9 = 16_f64 / 9_f64;
+    let f16_10 = 16_f64 / 10_f64;
+    let screen_format = width as f64 / height as f64;
+    let screen_format = if screen_format == f16_9 {
+        "16:9"
+    } else if screen_format == f16_10 {
+        "16:10"
+    } else {
+        "4:3"
+    };
+
     if short {
         let mode = format!("{}x{}x{}@{}", width, height, bit_depth, refresh_rate);
         let mode_pixel = format!(
             "{}x{}x{}@{}",
             pixel_width, pixel_height, bit_depth, refresh_rate
         );
-        println!("Display {}: {:15} - pixel {:15}", display, mode, mode_pixel);
+        println!(
+            "Display {}: {:15} - pixel {:15} - {:6} - {:6}",
+            display, mode, mode_pixel, hidpi, screen_format
+        );
     } else {
         println!(
-            "Display {}: {}x{}, pixel {}x{}, refresh rate: {}, bitDepth: {}",
-            display, width, height, pixel_width, pixel_height, refresh_rate, bit_depth
+            "Display {}: {}x{}, refresh rate: {}, bitDepth: {}, flags: 0x{:07X}, {}, {}",
+            display, width, height, refresh_rate, bit_depth, io_flags, hidpi, screen_format
         );
     }
 }
@@ -249,16 +268,19 @@ fn obtain_all_modes_for_all_displays() -> Result<Vec<Mode>> {
             let modes = array_opt.unwrap();
 
             modes.into_iter().for_each(|cgmode| {
-                result.push(Mode {
-                    display: i as u64,
-                    width: cgmode.width(),
-                    height: cgmode.height(),
-                    pixel_width: cgmode.pixel_width(),
-                    pixel_height: cgmode.pixel_height(),
-                    refresh_rate: cgmode.refresh_rate(),
-                    io_flags: cgmode.io_flags(),
-                    bit_depth: cgmode.bit_depth(),
-                });
+                let io_flags = cgmode.io_flags();
+                if (io_flags & (kDisplayModeValidFlag | kDisplayModeSafeFlag)) != 0 {
+                    result.push(Mode {
+                        display: i as u64,
+                        width: cgmode.width(),
+                        height: cgmode.height(),
+                        pixel_width: cgmode.pixel_width(),
+                        pixel_height: cgmode.pixel_height(),
+                        refresh_rate: cgmode.refresh_rate(),
+                        io_flags: cgmode.io_flags(),
+                        bit_depth: cgmode.bit_depth(),
+                    });
+                }
             });
         });
     result.sort_unstable_by(|a, b| {
