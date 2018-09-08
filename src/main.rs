@@ -155,13 +155,11 @@ fn get_current_mode(short: bool) -> Result<()> {
     Ok(())
 }
 
-fn set_current_mode(mode: &str, display: u64) -> Result<()> {
-    // println!("Setting mode: {}, display: {}", mode, display);
-
+fn parse_wanted_mode(mode: &str, display: u64) -> Result<Option<Mode>> {
     // Parse: in the style of 1920x1200x32@0
     let re = Regex::new(r"(\d+)x(\d+)x(\d+)@(\d+)").chain_err(|| "Could not compile regex")?;
     let captures = re.captures(mode);
-    let wanted_mode = match captures {
+    match captures {
         Some(caps) => {
             // println!(
             //     "Display: {}: width: {}, height: {}, bitdepth: {}, refresh: {}",
@@ -171,7 +169,7 @@ fn set_current_mode(mode: &str, display: u64) -> Result<()> {
             //     caps.get(3).unwrap().as_str(),
             //     caps.get(4).unwrap().as_str()
             // );
-            Some(Mode {
+            Ok(Some(Mode {
                 display: display,
                 width: caps.get(1).unwrap().as_str().parse().unwrap(),
                 height: caps.get(2).unwrap().as_str().parse().unwrap(),
@@ -180,10 +178,41 @@ fn set_current_mode(mode: &str, display: u64) -> Result<()> {
                 refresh_rate: caps.get(4).unwrap().as_str().parse().unwrap(),
                 io_flags: 0,
                 bit_depth: caps.get(3).unwrap().as_str().parse().unwrap(),
-            })
+            }))
         }
-        None => None,
+        None => Ok(None),
+    }
+}
+
+fn configure_display(cgmode: &CGDisplayMode, display_id: u32) -> Result<()> {
+    let display = CGDisplay::new(display_id);
+    let config_ref = convert_result(display.begin_configuration())
+        .chain_err(|| "Could not begin configuring the display")?;
+    let result = display.configure_display_with_display_mode(&config_ref, cgmode);
+    match result {
+        Ok(()) => {
+            let result = display
+                .complete_configuration(&config_ref, CGConfigureOption::ConfigurePermanently);
+            match result {
+                Ok(()) => {
+                    println!("Settings applied!");
+                }
+                Err(e) => {
+                    println!("Error: {}", e);
+                }
+            }
+        }
+        Err(e) => {
+            println!("Error: {}", e);
+        }
     };
+    Ok(())
+}
+
+fn set_current_mode(mode: &str, display: u64) -> Result<()> {
+    // println!("Setting mode: {}, display: {}", mode, display);
+    let wanted_mode =
+        parse_wanted_mode(mode, display).chain_err(|| "Could not parse wanted mode")?;
     if let Some(wanted_mode) = wanted_mode {
         let value = CFNumber::from(1);
         let key =
@@ -215,31 +244,8 @@ fn set_current_mode(mode: &str, display: u64) -> Result<()> {
                 .next();
 
             if let Some(index) = possible_index {
-                let display = CGDisplay::new(display_id);
-                let config_ref = display.begin_configuration();
-                if let Ok(config_ref) = config_ref {
-                    let result =
-                        display.configure_display_with_display_mode(&config_ref, &modes[index]);
-                    match result {
-                        Ok(()) => {
-                            let result = display.complete_configuration(
-                                &config_ref,
-                                CGConfigureOption::ConfigurePermanently,
-                            );
-                            match result {
-                                Ok(()) => {
-                                    println!("Settings applied!");
-                                }
-                                Err(e) => {
-                                    println!("Error: {}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            println!("Error: {}", e);
-                        }
-                    }
-                }
+                configure_display(&modes[index], display_id)
+                    .chain_err(|| "Could not actually configure display")?;
             }
             Ok(())
         } else {
@@ -369,7 +375,6 @@ fn run() -> Result<()> {
                 .unwrap_or("0")
                 .parse::<u64>()
                 .unwrap_or(0);
-
             set_current_mode(sub_m.value_of("resolution").unwrap(), display)
         }
         _ => Ok(()),
