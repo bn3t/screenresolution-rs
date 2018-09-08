@@ -7,8 +7,17 @@ extern crate core_foundation;
 extern crate core_graphics;
 extern crate libc;
 extern crate regex;
+extern crate termion;
 
 use regex::Regex;
+
+use std::io::{stdout, Read, Write};
+use std::thread;
+use std::time::Duration;
+
+use termion::async_stdin;
+
+use termion::raw::IntoRawMode;
 
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
@@ -155,13 +164,11 @@ fn get_current_mode(short: bool) -> Result<()> {
     Ok(())
 }
 
-fn set_current_mode(mode: &str, display: u64) -> Result<()> {
-    // println!("Setting mode: {}, display: {}", mode, display);
-
+fn parse_wanted_mode(mode: &str, display: u64) -> Result<Option<Mode>> {
     // Parse: in the style of 1920x1200x32@0
     let re = Regex::new(r"(\d+)x(\d+)x(\d+)@(\d+)").chain_err(|| "Could not compile regex")?;
     let captures = re.captures(mode);
-    let wanted_mode = match captures {
+    match captures {
         Some(caps) => {
             // println!(
             //     "Display: {}: width: {}, height: {}, bitdepth: {}, refresh: {}",
@@ -171,7 +178,7 @@ fn set_current_mode(mode: &str, display: u64) -> Result<()> {
             //     caps.get(3).unwrap().as_str(),
             //     caps.get(4).unwrap().as_str()
             // );
-            Some(Mode {
+            Ok(Some(Mode {
                 display: display,
                 width: caps.get(1).unwrap().as_str().parse().unwrap(),
                 height: caps.get(2).unwrap().as_str().parse().unwrap(),
@@ -180,10 +187,48 @@ fn set_current_mode(mode: &str, display: u64) -> Result<()> {
                 refresh_rate: caps.get(4).unwrap().as_str().parse().unwrap(),
                 io_flags: 0,
                 bit_depth: caps.get(3).unwrap().as_str().parse().unwrap(),
-            })
+            }))
         }
-        None => None,
+        None => Ok(None),
+    }
+}
+
+fn configure_display(cgmode: &CGDisplayMode, display_id: u32, confirm: bool) -> Result<()> {
+    let display = CGDisplay::new(display_id);
+    let config_ref = convert_result(display.begin_configuration())
+        .chain_err(|| "Could not begin configuring the display")?;
+    let result = display.configure_display_with_display_mode(&config_ref, cgmode);
+    match result {
+        Ok(()) => {
+            let do_it = if confirm {
+                wait_for_confirmation()
+            } else {
+                Some(())
+            };
+            if do_it.is_some() {
+                let result = display
+                    .complete_configuration(&config_ref, CGConfigureOption::ConfigurePermanently);
+                match result {
+                    Ok(()) => {
+                        println!("Settings applied!");
+                    }
+                    Err(e) => {
+                        println!("Error: {}", e);
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            println!("Error: {}", e);
+        }
     };
+    Ok(())
+}
+
+fn set_current_mode(mode: &str, display: u64, confirm: bool) -> Result<()> {
+    // println!("Setting mode: {}, display: {}", mode, display);
+    let wanted_mode =
+        parse_wanted_mode(mode, display).chain_err(|| "Could not parse wanted mode")?;
     if let Some(wanted_mode) = wanted_mode {
         let value = CFNumber::from(1);
         let key =
@@ -215,31 +260,8 @@ fn set_current_mode(mode: &str, display: u64) -> Result<()> {
                 .next();
 
             if let Some(index) = possible_index {
-                let display = CGDisplay::new(display_id);
-                let config_ref = display.begin_configuration();
-                if let Ok(config_ref) = config_ref {
-                    let result =
-                        display.configure_display_with_display_mode(&config_ref, &modes[index]);
-                    match result {
-                        Ok(()) => {
-                            let result = display.complete_configuration(
-                                &config_ref,
-                                CGConfigureOption::ConfigurePermanently,
-                            );
-                            match result {
-                                Ok(()) => {
-                                    println!("Settings applied!");
-                                }
-                                Err(e) => {
-                                    println!("Error: {}", e);
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            println!("Error: {}", e);
-                        }
-                    }
-                }
+                configure_display(&modes[index], display_id, confirm)
+                    .chain_err(|| "Could not actually configure display")?;
             }
             Ok(())
         } else {
@@ -310,6 +332,37 @@ fn list_modes(short: bool) -> Result<()> {
     Ok(())
 }
 
+fn wait_for_confirmation() -> Option<()> {
+    let stdout = stdout();
+    let raw_mode = stdout.lock().into_raw_mode();
+    let mut stdout = raw_mode.unwrap();
+    let mut stdin = async_stdin().bytes();
+
+    write!(stdout, "Confirm resolution change Y/n? ",).unwrap();
+
+    let mut result: Option<()> = None;
+
+    for _ in 0..10 {
+        write!(stdout, ".").unwrap();
+        let b = stdin.next();
+        match b {
+            Some(Ok(b'Y')) | Some(Ok(b'y')) => {
+                result = Some(());
+                break;
+            }
+            Some(Ok(b'N')) | Some(Ok(b'n')) => {
+                result = None;
+                break;
+            }
+            _ => {}
+        }
+        stdout.flush().unwrap();
+        thread::sleep(Duration::from_secs(1));
+    }
+
+    result
+}
+
 fn run() -> Result<()> {
     let matches = App::new("MacOS Screen Resolution Tool")
         .version(env!("CARGO_PKG_VERSION"))
@@ -347,6 +400,12 @@ fn run() -> Result<()> {
                         .short("d")
                         .takes_value(true),
                 ).arg(
+                    Arg::with_name("confirm")
+                        .long("confirm")
+                        .short("c")
+                        .help("Requests confirmation before applying changes")
+                        .takes_value(false),
+                ).arg(
                     Arg::with_name("resolution")
                         .value_name("RESOLUTION")
                         .help("Resolution string in the form of 1920x1200x32@0")
@@ -369,8 +428,8 @@ fn run() -> Result<()> {
                 .unwrap_or("0")
                 .parse::<u64>()
                 .unwrap_or(0);
-
-            set_current_mode(sub_m.value_of("resolution").unwrap(), display)
+            let confirm = sub_m.is_present("confirm");
+            set_current_mode(sub_m.value_of("resolution").unwrap(), display, confirm)
         }
         _ => Ok(()),
     }
