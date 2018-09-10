@@ -9,6 +9,7 @@ extern crate libc;
 extern crate regex;
 
 use regex::Regex;
+use std::io;
 
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
@@ -40,7 +41,7 @@ fn get_current_mode_for_display(
         .map(|cgmode| Mode::from(display_index, &cgmode))
 }
 
-fn print_current_mode(short: bool) -> Result<()> {
+fn print_current_mode(short: bool, output: &mut io::Write) -> Result<()> {
     println!(
         "Active display count: {}",
         convert_result(CGDisplay::active_display_count())
@@ -48,13 +49,12 @@ fn print_current_mode(short: bool) -> Result<()> {
     );
     let displays = convert_result(CGDisplay::active_displays())
         .chain_err(|| "Could not list active displays")?;
-    displays
-        .into_iter()
-        .enumerate()
-        .for_each(|(i, display_id)| {
-            let mode = get_current_mode_for_display(i as DisplayIndex, display_id).unwrap();
-            mode.print_mode(short);
-        });
+    let displays_enumerated = displays.into_iter().enumerate();
+    for (i, display_id) in displays_enumerated {
+        let mode = get_current_mode_for_display(i as DisplayIndex, display_id).unwrap();
+        mode.print_mode(short, output)
+            .chain_err(|| "Could print current mode")?;
+    }
     Ok(())
 }
 
@@ -202,15 +202,18 @@ fn obtain_all_modes_for_all_displays() -> Result<Vec<Mode>> {
     Ok(result)
 }
 
-fn list_modes(short: bool) -> Result<()> {
+fn list_modes(short: bool, output: &mut io::Write) -> Result<()> {
     let all_modes = obtain_all_modes_for_all_displays()?;
-    all_modes.into_iter().for_each(|mode| {
-        mode.print_mode(short);
-    });
+    for mode in all_modes.into_iter() {
+        mode.print_mode(short, output)
+            .chain_err(|| "Could not list modes")?;
+    }
     Ok(())
 }
 
 fn run() -> Result<()> {
+    let stdout = std::io::stdout();
+    let mut output = stdout.lock();
     let matches = App::new("MacOS Screen Resolution Tool")
         .version(env!("CARGO_PKG_VERSION"))
         .author("Bernard Niset")
@@ -257,11 +260,11 @@ fn run() -> Result<()> {
     match matches.subcommand() {
         ("list", Some(sub_m)) => {
             let short = sub_m.is_present("short");
-            list_modes(short)
+            list_modes(short, &mut output)
         }
         ("get", Some(sub_m)) => {
             let short = sub_m.is_present("short");
-            print_current_mode(short)
+            print_current_mode(short, &mut output)
         }
         ("set", Some(sub_m)) => {
             let display = sub_m

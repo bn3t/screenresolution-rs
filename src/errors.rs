@@ -34,6 +34,7 @@ impl From<base::CGError> for CGError {
 error_chain!{
     foreign_links {
         CgError(CGError);
+        IoError(::std::io::Error);
     }
 }
 

@@ -1,5 +1,9 @@
 use core_graphics::display::CGDisplayMode;
 
+use std::io;
+
+use errors::*;
+
 pub type DisplayIndex = u8;
 
 pub enum ScreenFormat {
@@ -32,11 +36,11 @@ impl Mode {
         }
     }
 
-    pub fn is_hdpi(&self) -> bool {
+    fn is_hdpi(&self) -> bool {
         self.width != self.pixel_width || self.height != self.pixel_height
     }
 
-    pub fn screen_format(&self) -> ScreenFormat {
+    fn screen_format(&self) -> ScreenFormat {
         let f16_9 = 16_f64 / 9_f64;
         let f16_10 = 16_f64 / 10_f64;
         let screen_format = self.width as f64 / self.height as f64;
@@ -49,7 +53,7 @@ impl Mode {
         }
     }
 
-    pub fn print_short(&self) {
+    fn print_short(&self, output: &mut io::Write) -> Result<()> {
         let hidpi = if self.is_hdpi() { "HiDPI" } else { "" };
         let screen_format = match self.screen_format() {
             ScreenFormat::F16_9 => "16:9",
@@ -65,20 +69,23 @@ impl Mode {
             "{}x{}x{}@{}",
             self.pixel_width, self.pixel_height, self.bit_depth, self.refresh_rate
         );
-        println!(
+        writeln!(
+            output,
             "Display {}: {:15} - pixel {:15} - {:6} - {:6}",
             self.display, mode_str, mode_pixel, hidpi, screen_format
-        );
+        ).chain_err(|| "Could not print long")?;
+        Ok(())
     }
 
-    pub fn print_long(&self) {
+    fn print_long(&self, output: &mut io::Write) -> Result<()> {
         let hidpi = if self.is_hdpi() { "HiDPI" } else { "" };
         let screen_format = match self.screen_format() {
             ScreenFormat::F16_9 => "16:9",
             ScreenFormat::F16_10 => "16:10",
             ScreenFormat::F4_3 => "4:3",
         };
-        println!(
+        writeln!(
+            output,
             "Display {}: {}x{}, refresh rate: {}, bitDepth: {}, flags: 0x{:07X}, {}, {}",
             self.display,
             self.width,
@@ -88,19 +95,124 @@ impl Mode {
             self.io_flags,
             hidpi,
             screen_format
-        );
+        ).chain_err(|| "Could not print long")?;
+        Ok(())
     }
 
-    pub fn print_mode(&self, short: bool) {
+    pub fn print_mode(&self, short: bool, output: &mut io::Write) -> Result<()> {
         match short {
-            true => self.print_short(),
-            false => self.print_long(),
-        }
+            true => self.print_short(output)?,
+            false => self.print_long(output)?,
+        };
+        Ok(())
     }
 }
 
 impl PartialEq for Mode {
     fn eq(&self, other: &Mode) -> bool {
-        self.display == other.display && self.width == other.width && self.height == self.height
+        self.display == other.display && self.width == other.width && self.height == other.height
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn partial_eq_equals() {
+        let mode1 = Mode {
+            display: 0,
+            width: 800,
+            height: 600,
+            pixel_width: 0,
+            pixel_height: 0,
+            refresh_rate: 0.0,
+            io_flags: 0,
+            bit_depth: 0,
+        };
+        let mode2 = Mode {
+            display: 0,
+            width: 800,
+            height: 600,
+            pixel_width: 0,
+            pixel_height: 0,
+            refresh_rate: 0.0,
+            io_flags: 0,
+            bit_depth: 0,
+        };
+        assert_eq!(true, mode1 == mode2);
+    }
+
+    #[test]
+    fn partial_eq_not_equals() {
+        let mode1 = Mode {
+            display: 0,
+            width: 800,
+            height: 600,
+            pixel_width: 0,
+            pixel_height: 0,
+            refresh_rate: 0.0,
+            io_flags: 0,
+            bit_depth: 0,
+        };
+        let mode2 = Mode {
+            display: 0,
+            width: 800,
+            height: 640,
+            pixel_width: 0,
+            pixel_height: 0,
+            refresh_rate: 0.0,
+            io_flags: 0,
+            bit_depth: 0,
+        };
+        assert_eq!(false, mode1 == mode2);
+    }
+
+    #[test]
+    fn print_mode_short() {
+        let mode1 = Mode {
+            display: 1,
+            width: 800,
+            height: 600,
+            pixel_width: 1024,
+            pixel_height: 768,
+            refresh_rate: 21.2,
+            io_flags: 123,
+            bit_depth: 32,
+        };
+        let mut vec = Vec::<u8>::new();
+
+        mode1
+            .print_mode(true, &mut vec)
+            .expect("Error while testing print_short");
+
+        assert_eq!(
+            "Display 1: 800x600x32@21.2 - pixel 1024x768x32@21.2 - HiDPI  - 4:3   \n",
+            String::from_utf8(vec).unwrap().as_str()
+        );
+    }
+
+    #[test]
+    fn print_mode_long() {
+        let mode1 = Mode {
+            display: 1,
+            width: 800,
+            height: 600,
+            pixel_width: 1024,
+            pixel_height: 768,
+            refresh_rate: 21.2,
+            io_flags: 123,
+            bit_depth: 32,
+        };
+        let mut vec = Vec::<u8>::new();
+
+        mode1
+            .print_mode(false, &mut vec)
+            .expect("Error while testing print_short");
+
+        assert_eq!(
+            "Display 1: 800x600, refresh rate: 21.2, bitDepth: 32, flags: 0x000007B, HiDPI, 4:3\n",
+            String::from_utf8(vec).unwrap().as_str()
+        );
     }
 }
