@@ -87,7 +87,7 @@ dependencies = [
 [[package]]
 name = "core-foundation"
 version = "0.6.1"
-source = "git+https://github.com/bn3t/core-foundation-rs.git?branch=cgdisplaymode-extensions#7cb87e5ba20d6159b54182e41b440078eaa9a851"
+source = "git+https://github.com/bn3t/core-foundation-rs.git?branch=cgdisplaymode-extensions#f58e2b6dd946edd1a32084e3517e120c3d0c79e4"
 dependencies = [
  "core-foundation-sys 0.6.1 (git+https://github.com/bn3t/core-foundation-rs.git?branch=cgdisplaymode-extensions)",
  "libc 0.2.43 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -96,12 +96,12 @@ dependencies = [
 [[package]]
 name = "core-foundation-sys"
 version = "0.6.1"
-source = "git+https://github.com/bn3t/core-foundation-rs.git?branch=cgdisplaymode-extensions#7cb87e5ba20d6159b54182e41b440078eaa9a851"
+source = "git+https://github.com/bn3t/core-foundation-rs.git?branch=cgdisplaymode-extensions#f58e2b6dd946edd1a32084e3517e120c3d0c79e4"
 
 [[package]]
 name = "core-graphics"
 version = "0.17.0"
-source = "git+https://github.com/bn3t/core-foundation-rs.git?branch=cgdisplaymode-extensions#7cb87e5ba20d6159b54182e41b440078eaa9a851"
+source = "git+https://github.com/bn3t/core-foundation-rs.git?branch=cgdisplaymode-extensions#f58e2b6dd946edd1a32084e3517e120c3d0c79e4"
 dependencies = [
  "bitflags 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "core-foundation 0.6.1 (git+https://github.com/bn3t/core-foundation-rs.git?branch=cgdisplaymode-extensions)",
