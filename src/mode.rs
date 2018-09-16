@@ -6,11 +6,14 @@ use errors::*;
 
 pub type DisplayIndex = u8;
 
+#[derive(Debug)]
 pub enum ScreenFormat {
     F16_9,
     F16_10,
     F4_3,
 }
+
+#[derive(Debug)]
 pub struct Mode {
     pub display: DisplayIndex,
     pub width: u64,
@@ -69,7 +72,7 @@ impl Mode {
             "{}x{}x{}@{}",
             self.pixel_width, self.pixel_height, self.bit_depth, self.refresh_rate
         );
-        writeln!(
+        write!(
             output,
             "Display {}: {:15} - pixel {:15} - {:6} - {:6}",
             self.display, mode_str, mode_pixel, hidpi, screen_format
@@ -84,7 +87,7 @@ impl Mode {
             ScreenFormat::F16_10 => "16:10",
             ScreenFormat::F4_3 => "4:3",
         };
-        writeln!(
+        write!(
             output,
             "Display {}: {}x{}, refresh rate: {}, bitDepth: {}, flags: 0x{:07X}, {}, {}",
             self.display,
@@ -105,6 +108,13 @@ impl Mode {
             false => self.print_long(output)?,
         };
         Ok(())
+    }
+
+    pub fn for_select(&self) -> String {
+        format!(
+            "{}x{}x{}@{}",
+            self.width, self.height, self.bit_depth, self.refresh_rate
+        )
     }
 }
 
@@ -187,7 +197,7 @@ mod tests {
             .expect("Error while testing print_short");
 
         assert_eq!(
-            "Display 1: 800x600x32@21.2 - pixel 1024x768x32@21.2 - HiDPI  - 4:3   \n",
+            "Display 1: 800x600x32@21.2 - pixel 1024x768x32@21.2 - HiDPI  - 4:3   ",
             String::from_utf8(vec).unwrap().as_str()
         );
     }
@@ -211,8 +221,24 @@ mod tests {
             .expect("Error while testing print_short");
 
         assert_eq!(
-            "Display 1: 800x600, refresh rate: 21.2, bitDepth: 32, flags: 0x000007B, HiDPI, 4:3\n",
+            "Display 1: 800x600, refresh rate: 21.2, bitDepth: 32, flags: 0x000007B, HiDPI, 4:3",
             String::from_utf8(vec).unwrap().as_str()
         );
+    }
+
+    #[test]
+    fn mode_for_select() {
+        let mode = Mode {
+            display: 1,
+            width: 800,
+            height: 600,
+            pixel_width: 1024,
+            pixel_height: 768,
+            refresh_rate: 21.2,
+            io_flags: 123,
+            bit_depth: 32,
+        };
+        let actual = mode.for_select();
+        assert_eq!("800x600x32@21.2", actual);
     }
 }

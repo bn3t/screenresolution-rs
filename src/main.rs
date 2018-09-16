@@ -5,6 +5,7 @@ extern crate error_chain;
 extern crate clap;
 extern crate core_foundation;
 extern crate core_graphics;
+extern crate dialoguer;
 extern crate libc;
 extern crate regex;
 
@@ -21,7 +22,9 @@ use core_graphics::display::{
     CGConfigureOption, CGDisplay, CGDisplayMode,
 };
 
-use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{App, AppSettings, Arg, ArgGroup, SubCommand};
+
+use dialoguer::Select;
 
 mod errors;
 mod mode;
@@ -83,6 +86,7 @@ fn parse_wanted_mode(mode: &str, display: DisplayIndex) -> Result<Mode> {
 }
 
 fn configure_display(cgmode: &CGDisplayMode, display_id: DisplayId) -> Result<()> {
+    println!("configure_display");
     let display = CGDisplay::new(display_id);
     let config_ref = convert_result(display.begin_configuration())
         .chain_err(|| "Could not begin configuring the display")?;
@@ -129,7 +133,14 @@ fn get_display_id_from_display_index(display_index: DisplayIndex) -> Result<Disp
 }
 
 fn set_current_mode(mode: &str, display_index: DisplayIndex) -> Result<()> {
-    // println!("Setting mode: {}, display: {}", mode, display);
+    {
+        println!("optain all modes");
+        let all_modes = obtain_all_modes_for_all_displays();
+        for mode in all_modes {
+            println!("mode: {:?}", mode);
+        }
+    }
+    println!("Setting mode: {}, display: {}", mode, display_index);
     let wanted_mode =
         parse_wanted_mode(mode, display_index).chain_err(|| "Could not parse wanted mode")?;
     let display_id = get_display_id_from_display_index(display_index)?;
@@ -198,7 +209,40 @@ fn list_modes(short: bool, output: &mut io::Write) -> Result<()> {
     for mode in all_modes {
         mode.print_mode(short, output)
             .chain_err(|| "Could not list modes")?;
+        writeln!(output, "")?;
     }
+    Ok(())
+}
+
+fn set_from_list_modes(short: bool, display_index: DisplayIndex) -> Result<()> {
+    let all_modes = obtain_all_modes_for_all_displays()?;
+
+    let mut selections = Vec::<String>::new();
+    let mut set_strings = Vec::<String>::new();
+    for mode in all_modes.iter() {
+        let mut output = Vec::<u8>::new();
+        mode.print_mode(short, &mut output)
+            .chain_err(|| "Could not list modes")?;
+        let selection = String::from_utf8(output).unwrap();
+        selections.push(selection);
+        set_strings.push(mode.for_select());
+    }
+    let selections_as_str: Vec<&str> = selections.iter().map(AsRef::as_ref).collect();
+    //let selections_as_str = selections.into_iter().map(|sel| -> sel.as_str()).collect();
+
+    let selection = Select::new()
+        .item(">>>>   Cancel")
+        .items(&selections_as_str.as_slice())
+        .interact()
+        .unwrap();
+    if selection > 0 {
+        println!("Setting mode {}", set_strings[selection - 1]);
+        set_current_mode(set_strings[selection - 1].as_str(), display_index)?;
+    } else {
+        println!("You cancelled");
+    }
+    // if let Result(selection) = selection {
+    // }
     Ok(())
 }
 
@@ -241,11 +285,20 @@ fn run() -> Result<()> {
                         .short("d")
                         .takes_value(true),
                 ).arg(
-                    Arg::with_name("resolution")
+                    Arg::with_name("text-resolution")
                         .value_name("RESOLUTION")
-                        .help("Resolution string in the form of 1920x1200x32@0")
-                        .required(true)
+                        .help("Resolution string in the form of WxHxP@R (e.g.: 1920x1200x32@0)")
+                        .required(false)
                         .takes_value(true),
+                ).arg(
+                    Arg::with_name("interactive-resolution")
+                        .short("i")
+                        .help("Will allow to choose resolution interactively")
+                        .required(false),
+                ).group(
+                    ArgGroup::with_name("resolution")
+                        .args(&["text-resolution", "interactive-resolution"])
+                        .required(true),
                 ),
         ).get_matches();
     match matches.subcommand() {
@@ -263,7 +316,13 @@ fn run() -> Result<()> {
                 .unwrap_or("0")
                 .parse::<DisplayIndex>()
                 .unwrap_or(0);
-            set_current_mode(sub_m.value_of("resolution").unwrap(), display)
+            if sub_m.value_of("text-resolution").is_some() {
+                set_current_mode(sub_m.value_of("resolution").unwrap(), display)
+            } else if sub_m.is_present("interactive-resolution") {
+                set_from_list_modes(true, display)
+            } else {
+                Err("Not a valid option".into())
+            }
         }
         _ => Ok(()),
     }
