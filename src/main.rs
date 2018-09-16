@@ -34,11 +34,15 @@ use mode::*;
 fn get_current_mode_for_display(
     display_index: DisplayIndex,
     display_id: DisplayId,
-) -> Option<Mode> {
+) -> Result<Mode> {
     let display = CGDisplay::new(display_id);
     display
         .display_mode()
         .map(|cgmode| Mode::from(display_index, &cgmode))
+        .map_or_else(
+            || Err(format!("No current mode for display: {}", display_index).into()),
+            |mode| Ok(mode),
+        )
 }
 
 fn print_current_mode(short: bool, output: &mut io::Write) -> Result<()> {
@@ -51,28 +55,20 @@ fn print_current_mode(short: bool, output: &mut io::Write) -> Result<()> {
         .chain_err(|| "Could not list active displays")?;
     let displays_enumerated = displays.into_iter().enumerate();
     for (i, display_id) in displays_enumerated {
-        let mode = get_current_mode_for_display(i as DisplayIndex, display_id).unwrap();
-        mode.print_mode(short, output)
-            .chain_err(|| "Could print current mode")?;
+        let mode = get_current_mode_for_display(i as DisplayIndex, display_id)?;
+        mode.print_mode(short, output)?;
     }
     Ok(())
 }
 
-fn parse_wanted_mode(mode: &str, display: DisplayIndex) -> Result<Option<Mode>> {
+fn parse_wanted_mode(mode: &str, display: DisplayIndex) -> Result<Mode> {
     // Parse: in the style of 1920x1200x32@0
     let re = Regex::new(r"(\d+)x(\d+)x(\d+)@(\d+)").chain_err(|| "Could not compile regex")?;
     let captures = re.captures(mode);
-    match captures {
-        Some(caps) => {
-            // println!(
-            //     "Display: {}: width: {}, height: {}, bitdepth: {}, refresh: {}",
-            //     display,
-            //     caps.get(1).unwrap().as_str(),
-            //     caps.get(2).unwrap().as_str(),
-            //     caps.get(3).unwrap().as_str(),
-            //     caps.get(4).unwrap().as_str()
-            // );
-            Ok(Some(Mode {
+    captures.map_or_else(
+        || Err(format!("Not a valid mode: {}", mode).into()),
+        |caps| {
+            Ok(Mode {
                 display: display,
                 width: caps.get(1).unwrap().as_str().parse().unwrap(),
                 height: caps.get(2).unwrap().as_str().parse().unwrap(),
@@ -81,10 +77,9 @@ fn parse_wanted_mode(mode: &str, display: DisplayIndex) -> Result<Option<Mode>> 
                 refresh_rate: caps.get(4).unwrap().as_str().parse().unwrap(),
                 io_flags: 0,
                 bit_depth: caps.get(3).unwrap().as_str().parse().unwrap(),
-            }))
-        }
-        None => Ok(None),
-    }
+            })
+        },
+    )
 }
 
 fn configure_display(cgmode: &CGDisplayMode, display_id: DisplayId) -> Result<()> {
@@ -119,7 +114,7 @@ fn verify_current(mode: &Mode, display_index: DisplayIndex, display_id: DisplayI
         .unwrap_or(false)
 }
 
-fn get_display_id_from_display_index(display_index: DisplayIndex) -> Option<DisplayId> {
+fn get_display_id_from_display_index(display_index: DisplayIndex) -> Result<DisplayId> {
     let display_ids = CGDisplay::active_displays().unwrap();
     display_ids
         .into_iter()
@@ -127,50 +122,49 @@ fn get_display_id_from_display_index(display_index: DisplayIndex) -> Option<Disp
         .filter(|(i, _)| *i as DisplayIndex == display_index)
         .map(|(_, display_id)| display_id)
         .next()
+        .map_or_else(
+            || Err(format!("Not a valid display: {}", display_index).into()),
+            |display_id| Ok(display_id),
+        )
 }
 
 fn set_current_mode(mode: &str, display_index: DisplayIndex) -> Result<()> {
     // println!("Setting mode: {}, display: {}", mode, display);
     let wanted_mode =
         parse_wanted_mode(mode, display_index).chain_err(|| "Could not parse wanted mode")?;
-    if let Some(wanted_mode) = wanted_mode {
-        let target_display_id = get_display_id_from_display_index(display_index);
-        if let Some(display_id) = target_display_id {
-            if verify_current(&wanted_mode, display_index, display_id) {
-                let cgmodes = all_display_modes(display_id).unwrap();
-                let possible_index = cgmodes
-                    .clone()
-                    .into_iter()
-                    .enumerate()
-                    .filter(|(_, cgmode)| {
-                        cgmode.width() == wanted_mode.width
-                            && cgmode.height() == wanted_mode.height
-                            && cgmode.bit_depth() == wanted_mode.bit_depth
-                            && cgmode.refresh_rate() == wanted_mode.refresh_rate
-                    }).map(|(i, _)| i)
-                    .next();
+    let display_id = get_display_id_from_display_index(display_index)?;
+    if verify_current(&wanted_mode, display_index, display_id) {
+        let cgmodes = all_display_modes(display_id).unwrap();
+        let possible_index = cgmodes
+            .clone()
+            .into_iter()
+            .enumerate()
+            .filter(|(_, cgmode)| {
+                cgmode.width() == wanted_mode.width
+                    && cgmode.height() == wanted_mode.height
+                    && cgmode.bit_depth() == wanted_mode.bit_depth
+                    && cgmode.refresh_rate() == wanted_mode.refresh_rate
+            }).map(|(i, _)| i)
+            .next();
 
-                if let Some(index) = possible_index {
-                    configure_display(&cgmodes[index], display_id)
-                        .chain_err(|| "Could not actually configure display")?;
-                }
-                Ok(())
-            } else {
-                Err("Wanted Mode is already current".into())
-            }
-        } else {
-            Err(format!("Not a valid display: {}", display_index).into())
+        if let Some(index) = possible_index {
+            configure_display(&cgmodes[index], display_id)
+                .chain_err(|| "Could not actually configure display")?;
         }
+        Ok(())
     } else {
-        Err(format!("Not a valid mode: {}", mode).into())
+        Err("Wanted Mode is already current".into())
     }
 }
 
-fn all_display_modes(display_id: DisplayId) -> Option<Vec<CGDisplayMode>> {
+fn all_display_modes(display_id: DisplayId) -> Result<Vec<CGDisplayMode>> {
     let value = CFNumber::from(1);
     let key = unsafe { CFString::wrap_under_get_rule(kCGDisplayShowDuplicateLowResolutionModes) };
     let options = CFDictionary::from_CFType_pairs(&[(key.as_CFType(), value.as_CFType())]);
-    CGDisplayMode::all_display_modes(display_id, options.as_concrete_TypeRef())
+    CGDisplayMode::all_display_modes(display_id, options.as_concrete_TypeRef()).map_or_else(
+        || Err("No display modes for display".into()),
+        |cgmodes| Ok(cgmodes),
+    )
 }
 
 fn obtain_all_modes_for_all_displays() -> Result<Vec<Mode>> {
@@ -179,20 +173,17 @@ fn obtain_all_modes_for_all_displays() -> Result<Vec<Mode>> {
     let display_ids = convert_result(CGDisplay::active_displays())
         .chain_err(|| "Unable to list active displays")?;
 
-    display_ids
-        .into_iter()
-        .enumerate()
-        .for_each(|(i, display_id)| {
-            let array_opt: Option<Vec<CGDisplayMode>> = all_display_modes(display_id);
-            let modes = array_opt.unwrap();
+    let display_ids_enumerate = display_ids.into_iter().enumerate();
+    for (i, display_id) in display_ids_enumerate {
+        let modes: Vec<CGDisplayMode> = all_display_modes(display_id)?;
 
-            modes.into_iter().for_each(|cgmode| {
-                let io_flags = cgmode.io_flags();
-                if (io_flags & (kDisplayModeValidFlag | kDisplayModeSafeFlag)) != 0 {
-                    result.push(Mode::from(i as DisplayIndex, &cgmode));
-                }
-            });
+        modes.into_iter().for_each(|cgmode| {
+            let io_flags = cgmode.io_flags();
+            if (io_flags & (kDisplayModeValidFlag | kDisplayModeSafeFlag)) != 0 {
+                result.push(Mode::from(i as DisplayIndex, &cgmode));
+            }
         });
+    }
     result.sort_unstable_by(|a, b| {
         a.display
             .cmp(&(b.display))
@@ -204,7 +195,7 @@ fn obtain_all_modes_for_all_displays() -> Result<Vec<Mode>> {
 
 fn list_modes(short: bool, output: &mut io::Write) -> Result<()> {
     let all_modes = obtain_all_modes_for_all_displays()?;
-    for mode in all_modes.into_iter() {
+    for mode in all_modes {
         mode.print_mode(short, output)
             .chain_err(|| "Could not list modes")?;
     }
