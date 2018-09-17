@@ -102,10 +102,10 @@ impl Mode {
         Ok(())
     }
 
-    pub fn print_mode(&self, short: bool, output: &mut io::Write) -> Result<()> {
-        match short {
-            true => self.print_short(output)?,
-            false => self.print_long(output)?,
+    pub fn print_mode(&self, long: bool, output: &mut io::Write) -> Result<()> {
+        match long {
+            false => self.print_short(output)?,
+            true => self.print_long(output)?,
         };
         Ok(())
     }
@@ -202,7 +202,7 @@ mod tests {
         let mut vec = Vec::<u8>::new();
 
         mode1
-            .print_mode(true, &mut vec)
+            .print_mode(false, &mut vec)
             .expect("Error while testing print_short");
 
         assert_eq!(
@@ -227,7 +227,7 @@ mod tests {
         let mut vec = Vec::<u8>::new();
 
         mode1
-            .print_mode(false, &mut vec)
+            .print_mode(true, &mut vec)
             .expect("Error while testing print_short");
 
         assert_eq!(

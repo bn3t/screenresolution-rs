@@ -78,12 +78,13 @@ impl ScreenResolution {
             )
     }
 
-    pub fn print_current_mode(&self, short: bool, output: &mut io::Write) -> Result<()> {
+    pub fn print_current_mode(&self, long: bool, output: &mut io::Write) -> Result<()> {
         let displays_enumerated = self.displays.iter().enumerate();
         for (i, &display_id) in displays_enumerated {
             let mode =
                 ScreenResolution::get_current_mode_for_display(i as DisplayIndex, display_id)?;
-            mode.print_mode(short, output)?;
+            mode.print_mode(long, output)?;
+            writeln!(output, "")?;
         }
         Ok(())
     }
@@ -187,21 +188,21 @@ impl ScreenResolution {
         )
     }
 
-    pub fn list_modes(&self, short: bool, output: &mut io::Write) -> Result<()> {
+    pub fn list_modes(&self, long: bool, output: &mut io::Write) -> Result<()> {
         for mode in self.modes.iter() {
-            mode.print_mode(short, output)
+            mode.print_mode(long, output)
                 .chain_err(|| "Could not list modes")?;
             writeln!(output, "")?;
         }
         Ok(())
     }
 
-    pub fn set_from_list_modes(&self, short: bool, display_index: DisplayIndex) -> Result<()> {
+    pub fn set_from_list_modes(&self, long: bool, display_index: DisplayIndex) -> Result<()> {
         let mut selections = Vec::<String>::new();
         let mut set_strings = Vec::<String>::new();
         for mode in self.modes.iter() {
             let mut output = Vec::<u8>::new();
-            mode.print_mode(short, &mut output)
+            mode.print_mode(long, &mut output)
                 .chain_err(|| "Could not list modes")?;
             let selection = String::from_utf8(output).unwrap();
             selections.push(selection);
@@ -240,9 +241,10 @@ fn run() -> Result<()> {
             SubCommand::with_name("list")
                 .about("List available resolutions for current display")
                 .arg(
-                    Arg::with_name("short")
-                        .long("short")
-                        .short("s")
+                    Arg::with_name("long")
+                        .long("long")
+                        .short("l")
+                        .help("Shows more details on the displayed resolutions")
                         .required(false)
                         .takes_value(false),
                 ),
@@ -250,9 +252,10 @@ fn run() -> Result<()> {
             SubCommand::with_name("get")
                 .about("Get current active resution for current display")
                 .arg(
-                    Arg::with_name("short")
-                        .long("short")
-                        .short("s")
+                    Arg::with_name("long")
+                        .long("long")
+                        .short("l")
+                        .help("Shows more details on the current resolution")
                         .required(false)
                         .takes_value(false),
                 ),
@@ -273,6 +276,7 @@ fn run() -> Result<()> {
                         .takes_value(true),
                 ).arg(
                     Arg::with_name("interactive-resolution")
+                        .long("interactive")
                         .short("i")
                         .help("Will allow to choose resolution interactively")
                         .required(false),
@@ -286,12 +290,12 @@ fn run() -> Result<()> {
     let screen_resolution = ScreenResolution::new()?;
     match matches.subcommand() {
         ("list", Some(sub_m)) => {
-            let short = sub_m.is_present("short");
-            screen_resolution.list_modes(short, &mut output)
+            let long = sub_m.is_present("long");
+            screen_resolution.list_modes(long, &mut output)
         }
         ("get", Some(sub_m)) => {
-            let short = sub_m.is_present("short");
-            screen_resolution.print_current_mode(short, &mut output)
+            let long = sub_m.is_present("long");
+            screen_resolution.print_current_mode(long, &mut output)
         }
         ("set", Some(sub_m)) => {
             let display = sub_m
