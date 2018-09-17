@@ -11,8 +11,10 @@ pub enum ScreenFormat {
     F16_10,
     F4_3,
 }
+
 pub struct Mode {
     pub display: DisplayIndex,
+    pub cgmode: Option<CGDisplayMode>,
     pub width: u64,
     pub height: u64,
     pub pixel_width: u64,
@@ -23,7 +25,7 @@ pub struct Mode {
 }
 
 impl Mode {
-    pub fn from(display: DisplayIndex, cgmode: &CGDisplayMode) -> Mode {
+    pub fn from(display: DisplayIndex, cgmode: CGDisplayMode) -> Mode {
         Mode {
             display: display,
             width: cgmode.width(),
@@ -33,6 +35,7 @@ impl Mode {
             refresh_rate: cgmode.refresh_rate(),
             io_flags: cgmode.io_flags(),
             bit_depth: cgmode.bit_depth(),
+            cgmode: Some(cgmode),
         }
     }
 
@@ -69,7 +72,7 @@ impl Mode {
             "{}x{}x{}@{}",
             self.pixel_width, self.pixel_height, self.bit_depth, self.refresh_rate
         );
-        writeln!(
+        write!(
             output,
             "Display {}: {:15} - pixel {:15} - {:6} - {:6}",
             self.display, mode_str, mode_pixel, hidpi, screen_format
@@ -84,7 +87,7 @@ impl Mode {
             ScreenFormat::F16_10 => "16:10",
             ScreenFormat::F4_3 => "4:3",
         };
-        writeln!(
+        write!(
             output,
             "Display {}: {}x{}, refresh rate: {}, bitDepth: {}, flags: 0x{:07X}, {}, {}",
             self.display,
@@ -106,11 +109,22 @@ impl Mode {
         };
         Ok(())
     }
+
+    pub fn for_select(&self) -> String {
+        format!(
+            "{}x{}x{}@{}",
+            self.width, self.height, self.bit_depth, self.refresh_rate
+        )
+    }
 }
 
 impl PartialEq for Mode {
     fn eq(&self, other: &Mode) -> bool {
-        self.display == other.display && self.width == other.width && self.height == other.height
+        self.display == other.display
+            && self.width == other.width
+            && self.height == other.height
+            && self.bit_depth == other.bit_depth
+            && self.refresh_rate == other.refresh_rate
     }
 }
 
@@ -122,23 +136,25 @@ mod tests {
     fn partial_eq_equals() {
         let mode1 = Mode {
             display: 0,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 0,
             pixel_height: 0,
-            refresh_rate: 0.0,
+            refresh_rate: 75.0,
             io_flags: 0,
-            bit_depth: 0,
+            bit_depth: 32,
         };
         let mode2 = Mode {
             display: 0,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 0,
             pixel_height: 0,
-            refresh_rate: 0.0,
+            refresh_rate: 75.0,
             io_flags: 0,
-            bit_depth: 0,
+            bit_depth: 32,
         };
         assert_eq!(true, mode1 == mode2);
     }
@@ -147,6 +163,7 @@ mod tests {
     fn partial_eq_not_equals() {
         let mode1 = Mode {
             display: 0,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 0,
@@ -157,6 +174,7 @@ mod tests {
         };
         let mode2 = Mode {
             display: 0,
+            cgmode: None,
             width: 800,
             height: 640,
             pixel_width: 0,
@@ -172,6 +190,7 @@ mod tests {
     fn print_mode_short() {
         let mode1 = Mode {
             display: 1,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 1024,
@@ -187,7 +206,7 @@ mod tests {
             .expect("Error while testing print_short");
 
         assert_eq!(
-            "Display 1: 800x600x32@21.2 - pixel 1024x768x32@21.2 - HiDPI  - 4:3   \n",
+            "Display 1: 800x600x32@21.2 - pixel 1024x768x32@21.2 - HiDPI  - 4:3   ",
             String::from_utf8(vec).unwrap().as_str()
         );
     }
@@ -196,6 +215,7 @@ mod tests {
     fn print_mode_long() {
         let mode1 = Mode {
             display: 1,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 1024,
@@ -211,8 +231,25 @@ mod tests {
             .expect("Error while testing print_short");
 
         assert_eq!(
-            "Display 1: 800x600, refresh rate: 21.2, bitDepth: 32, flags: 0x000007B, HiDPI, 4:3\n",
+            "Display 1: 800x600, refresh rate: 21.2, bitDepth: 32, flags: 0x000007B, HiDPI, 4:3",
             String::from_utf8(vec).unwrap().as_str()
         );
+    }
+
+    #[test]
+    fn mode_for_select() {
+        let mode = Mode {
+            display: 1,
+            cgmode: None,
+            width: 800,
+            height: 600,
+            pixel_width: 1024,
+            pixel_height: 768,
+            refresh_rate: 21.2,
+            io_flags: 123,
+            bit_depth: 32,
+        };
+        let actual = mode.for_select();
+        assert_eq!("800x600x32@21.2", actual);
     }
 }
