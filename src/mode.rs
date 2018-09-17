@@ -6,16 +6,15 @@ use errors::*;
 
 pub type DisplayIndex = u8;
 
-#[derive(Debug)]
 pub enum ScreenFormat {
     F16_9,
     F16_10,
     F4_3,
 }
 
-#[derive(Debug)]
 pub struct Mode {
     pub display: DisplayIndex,
+    pub cgmode: Option<CGDisplayMode>,
     pub width: u64,
     pub height: u64,
     pub pixel_width: u64,
@@ -26,7 +25,7 @@ pub struct Mode {
 }
 
 impl Mode {
-    pub fn from(display: DisplayIndex, cgmode: &CGDisplayMode) -> Mode {
+    pub fn from(display: DisplayIndex, cgmode: CGDisplayMode) -> Mode {
         Mode {
             display: display,
             width: cgmode.width(),
@@ -36,6 +35,7 @@ impl Mode {
             refresh_rate: cgmode.refresh_rate(),
             io_flags: cgmode.io_flags(),
             bit_depth: cgmode.bit_depth(),
+            cgmode: Some(cgmode),
         }
     }
 
@@ -120,7 +120,11 @@ impl Mode {
 
 impl PartialEq for Mode {
     fn eq(&self, other: &Mode) -> bool {
-        self.display == other.display && self.width == other.width && self.height == other.height
+        self.display == other.display
+            && self.width == other.width
+            && self.height == other.height
+            && self.bit_depth == other.bit_depth
+            && self.refresh_rate == other.refresh_rate
     }
 }
 
@@ -132,23 +136,25 @@ mod tests {
     fn partial_eq_equals() {
         let mode1 = Mode {
             display: 0,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 0,
             pixel_height: 0,
-            refresh_rate: 0.0,
+            refresh_rate: 75.0,
             io_flags: 0,
-            bit_depth: 0,
+            bit_depth: 32,
         };
         let mode2 = Mode {
             display: 0,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 0,
             pixel_height: 0,
-            refresh_rate: 0.0,
+            refresh_rate: 75.0,
             io_flags: 0,
-            bit_depth: 0,
+            bit_depth: 32,
         };
         assert_eq!(true, mode1 == mode2);
     }
@@ -157,6 +163,7 @@ mod tests {
     fn partial_eq_not_equals() {
         let mode1 = Mode {
             display: 0,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 0,
@@ -167,6 +174,7 @@ mod tests {
         };
         let mode2 = Mode {
             display: 0,
+            cgmode: None,
             width: 800,
             height: 640,
             pixel_width: 0,
@@ -182,6 +190,7 @@ mod tests {
     fn print_mode_short() {
         let mode1 = Mode {
             display: 1,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 1024,
@@ -206,6 +215,7 @@ mod tests {
     fn print_mode_long() {
         let mode1 = Mode {
             display: 1,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 1024,
@@ -230,6 +240,7 @@ mod tests {
     fn mode_for_select() {
         let mode = Mode {
             display: 1,
+            cgmode: None,
             width: 800,
             height: 600,
             pixel_width: 1024,
