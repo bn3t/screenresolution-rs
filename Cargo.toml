@@ -1,6 +1,6 @@
 [package]
 name = "screenresolution-rs"
-version = "0.1.2-pre"
+version = "0.1.2"
 authors = ["Bernard Niset <bernard.niset@gmail.com>"]
 description = "Allows to list, get and set screen resolutions."
 
