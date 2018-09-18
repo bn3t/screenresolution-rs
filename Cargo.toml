@@ -1,17 +1,20 @@
 [package]
 name = "screenresolution-rs"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Bernard Niset <bernard.niset@gmail.com>"]
 description = "Allows to list, get and set screen resolutions."
 
 [dependencies]
 libc = "0.2"
-core-graphics = { git = "https://github.com/bn3t/core-foundation-rs.git", branch = "cgdisplaymode-extensions" }
-core-foundation = { git = "https://github.com/bn3t/core-foundation-rs.git", branch = "cgdisplaymode-extensions" }
+# core-graphics = { git = "https://github.com/bn3t/core-foundation-rs.git", branch = "cgdisplaymode-extensions" }
+core-graphics = { path="../core-foundation-rs/core-graphics" }
+# core-foundation = { git = "https://github.com/bn3t/core-foundation-rs.git", branch = "cgdisplaymode-extensions" }
+core-foundation =  { path="../core-foundation-rs/core-foundation" }
 foreign-types = "0.3.0"
 clap = "2.32.0"
 regex = "1.0.4"
 error-chain = "0.12.0"
+dialoguer="0.1.0"
 
 [build-dependencies]
 chrono = "0.4.0"
