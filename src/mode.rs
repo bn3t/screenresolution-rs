@@ -22,6 +22,7 @@ pub struct Mode {
     pub refresh_rate: f64,
     pub io_flags: u32,
     pub bit_depth: usize,
+    pub current: bool,
 }
 
 impl Mode {
@@ -36,6 +37,7 @@ impl Mode {
             io_flags: cgmode.io_flags(),
             bit_depth: cgmode.bit_depth(),
             cgmode: Some(cgmode),
+            current: false,
         }
     }
 
@@ -74,8 +76,13 @@ impl Mode {
         );
         write!(
             output,
-            "Display {}: {:15} - pixel {:15} - {:6} - {:6}",
-            self.display, mode_str, mode_pixel, hidpi, screen_format
+            "{}Display {}: {:15} - pixel {:15} - {:6} - {:6}",
+            if self.current { "*" } else { " " },
+            self.display,
+            mode_str,
+            mode_pixel,
+            hidpi,
+            screen_format
         ).chain_err(|| "Could not print long")?;
         Ok(())
     }
@@ -89,7 +96,8 @@ impl Mode {
         };
         write!(
             output,
-            "Display {}: {}x{}, refresh rate: {}, bitDepth: {}, flags: 0x{:07X}, {}, {}",
+            "{}Display {}: {}x{}, refresh rate: {}, bitDepth: {}, flags: 0x{:07X}, {}, {}",
+            if self.current { "*" } else { " " },
             self.display,
             self.width,
             self.height,
@@ -144,6 +152,7 @@ mod tests {
             refresh_rate: 75.0,
             io_flags: 0,
             bit_depth: 32,
+            current: true,
         };
         let mode2 = Mode {
             display: 0,
@@ -155,6 +164,7 @@ mod tests {
             refresh_rate: 75.0,
             io_flags: 0,
             bit_depth: 32,
+            current: false,
         };
         assert_eq!(true, mode1 == mode2);
     }
@@ -171,6 +181,7 @@ mod tests {
             refresh_rate: 0.0,
             io_flags: 0,
             bit_depth: 0,
+            current: false,
         };
         let mode2 = Mode {
             display: 0,
@@ -182,6 +193,7 @@ mod tests {
             refresh_rate: 0.0,
             io_flags: 0,
             bit_depth: 0,
+            current: true,
         };
         assert_eq!(false, mode1 == mode2);
     }
@@ -198,6 +210,7 @@ mod tests {
             refresh_rate: 21.2,
             io_flags: 123,
             bit_depth: 32,
+            current: false,
         };
         let mut vec = Vec::<u8>::new();
 
@@ -206,7 +219,33 @@ mod tests {
             .expect("Error while testing print_short");
 
         assert_eq!(
-            "Display 1: 800x600x32@21.2 - pixel 1024x768x32@21.2 - HiDPI  - 4:3   ",
+            " Display 1: 800x600x32@21.2 - pixel 1024x768x32@21.2 - HiDPI  - 4:3   ",
+            String::from_utf8(vec).unwrap().as_str()
+        );
+    }
+
+    #[test]
+    fn print_mode_short_current() {
+        let mode1 = Mode {
+            display: 1,
+            cgmode: None,
+            width: 800,
+            height: 600,
+            pixel_width: 1024,
+            pixel_height: 768,
+            refresh_rate: 21.2,
+            io_flags: 123,
+            bit_depth: 32,
+            current: true,
+        };
+        let mut vec = Vec::<u8>::new();
+
+        mode1
+            .print_mode(false, &mut vec)
+            .expect("Error while testing print_short");
+
+        assert_eq!(
+            "*Display 1: 800x600x32@21.2 - pixel 1024x768x32@21.2 - HiDPI  - 4:3   ",
             String::from_utf8(vec).unwrap().as_str()
         );
     }
@@ -223,6 +262,7 @@ mod tests {
             refresh_rate: 21.2,
             io_flags: 123,
             bit_depth: 32,
+            current: false,
         };
         let mut vec = Vec::<u8>::new();
 
@@ -231,7 +271,33 @@ mod tests {
             .expect("Error while testing print_short");
 
         assert_eq!(
-            "Display 1: 800x600, refresh rate: 21.2, bitDepth: 32, flags: 0x000007B, HiDPI, 4:3",
+            " Display 1: 800x600, refresh rate: 21.2, bitDepth: 32, flags: 0x000007B, HiDPI, 4:3",
+            String::from_utf8(vec).unwrap().as_str()
+        );
+    }
+
+    #[test]
+    fn print_mode_long_current() {
+        let mode1 = Mode {
+            display: 1,
+            cgmode: None,
+            width: 800,
+            height: 600,
+            pixel_width: 1024,
+            pixel_height: 768,
+            refresh_rate: 21.2,
+            io_flags: 123,
+            bit_depth: 32,
+            current: true,
+        };
+        let mut vec = Vec::<u8>::new();
+
+        mode1
+            .print_mode(true, &mut vec)
+            .expect("Error while testing print_short");
+
+        assert_eq!(
+            "*Display 1: 800x600, refresh rate: 21.2, bitDepth: 32, flags: 0x000007B, HiDPI, 4:3",
             String::from_utf8(vec).unwrap().as_str()
         );
     }
@@ -248,6 +314,7 @@ mod tests {
             refresh_rate: 21.2,
             io_flags: 123,
             bit_depth: 32,
+            current: false,
         };
         let actual = mode.for_select();
         assert_eq!("800x600x32@21.2", actual);
