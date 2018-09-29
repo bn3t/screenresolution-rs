@@ -1,4 +1,5 @@
-# MacOS screen resolution tool
+
+# MacOS screen resolution tool [![Build Status](https://travis-ci.org/bn3t/screenresolution-rs.svg?branch=master)](https://travis-ci.org/bn3t/screenresolution-rs)
 
 ## General Usage
 
