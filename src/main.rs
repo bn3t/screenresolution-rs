@@ -32,6 +32,9 @@ mod mode;
 use errors::*;
 use mode::*;
 
+/// ScreenResolution struct to hold the app main state:
+/// * A vec of displays
+/// * A vec of Modes corresponding to all Modes available for all displays.
 struct ScreenResolution {
     displays: Vec<CGDirectDisplayID>,
     modes: Vec<Mode>,
@@ -39,18 +42,21 @@ struct ScreenResolution {
 
 impl ScreenResolution {
     pub fn new() -> Result<Self> {
-        //let displays = CGDisplay::active_displays().unwrap();
         let mut modes: Vec<Mode> = Vec::with_capacity(50);
 
         let displays = convert_result(CGDisplay::active_displays())
             .chain_err(|| "Unable to list active displays")?;
         for (i, &display_id) in displays.iter().enumerate() {
+            let current_display_mode =
+                ScreenResolution::get_current_mode_for_display(i as DisplayIndex, display_id)?;
             ScreenResolution::all_display_modes(display_id)?
                 .into_iter()
                 .for_each(|cgmode| {
                     let io_flags = cgmode.io_flags();
                     if (io_flags & (kDisplayModeValidFlag | kDisplayModeSafeFlag)) != 0 {
-                        modes.push(Mode::from(i as DisplayIndex, cgmode));
+                        let mut mode = Mode::from(i as DisplayIndex, cgmode);
+                        mode.current = mode == current_display_mode;
+                        modes.push(mode);
                     }
                 });
         }
@@ -64,7 +70,7 @@ impl ScreenResolution {
         Ok(ScreenResolution { displays, modes })
     }
 
-    pub fn get_current_mode_for_display(
+    fn get_current_mode_for_display(
         display_index: DisplayIndex,
         display_id: CGDirectDisplayID,
     ) -> Result<Mode> {
@@ -79,12 +85,10 @@ impl ScreenResolution {
     }
 
     pub fn print_current_mode(&self, long: bool, output: &mut io::Write) -> Result<()> {
-        let displays_enumerated = self.displays.iter().enumerate();
-        for (i, &display_id) in displays_enumerated {
-            let mode =
-                ScreenResolution::get_current_mode_for_display(i as DisplayIndex, display_id)?;
+        let current_modes: Vec<&Mode> = self.modes.iter().filter(|&mode| mode.current).collect();
+        for mode in current_modes {
             mode.print_mode(long, output)?;
-            writeln!(output, "")?;
+            writeln!(output, "");
         }
         Ok(())
     }
@@ -106,13 +110,13 @@ impl ScreenResolution {
                     refresh_rate: caps.get(4).unwrap().as_str().parse().unwrap(),
                     io_flags: 0,
                     bit_depth: caps.get(3).unwrap().as_str().parse().unwrap(),
+                    current: false,
                 })
             },
         )
     }
 
     fn configure_display(cgmode: &CGDisplayMode, display_id: CGDirectDisplayID) -> Result<()> {
-        println!("configure_display");
         let display = CGDisplay::new(display_id);
         let config_ref = convert_result(display.begin_configuration())
             .chain_err(|| "Could not begin configuring the display")?;
@@ -139,13 +143,17 @@ impl ScreenResolution {
 
     // Return true if the current mode is different from specified mode
     fn verify_current(
+        &self,
         mode: &Mode,
         display_index: DisplayIndex,
-        display_id: CGDirectDisplayID,
+        _display_id: CGDirectDisplayID,
     ) -> bool {
-        ScreenResolution::get_current_mode_for_display(display_index, display_id)
-            .map(|current_mode| current_mode != *mode)
-            .unwrap_or(false)
+        !self
+            .modes
+            .iter()
+            .filter(|&m| m.current && m.display == display_index && mode == m)
+            .next()
+            .is_some()
     }
 
     pub fn set_current_mode(&self, mode: &str, display_index: DisplayIndex) -> Result<()> {
@@ -154,7 +162,7 @@ impl ScreenResolution {
             .chain_err(|| "Could not parse wanted mode")?;
         let display_id = self.displays.get(display_index as usize);
         if let Some(&display_id) = display_id {
-            if ScreenResolution::verify_current(&wanted_mode, display_index, display_id) {
+            if self.verify_current(&wanted_mode, display_index, display_id) {
                 let possible_index = self
                     .modes
                     .iter()
@@ -212,18 +220,19 @@ impl ScreenResolution {
         //let selections_as_str = selections.into_iter().map(|sel| -> sel.as_str()).collect();
 
         let selection = Select::new()
-            .item(">>>>   Cancel")
+            //.item(">>>>   Cancel")
             .items(&selections_as_str.as_slice())
-            .interact()
+            .interact_opt()
             .unwrap();
-        if selection > 0 {
-            println!("Setting mode {}", set_strings[selection - 1]);
-            self.set_current_mode(set_strings[selection - 1].as_str(), display_index)?;
-        } else {
-            println!("You cancelled");
+        match selection {
+            Some(selection) => {
+                println!("Setting mode {}", set_strings[selection]);
+                self.set_current_mode(set_strings[selection].as_str(), display_index)?;
+            }
+            _ => {
+                println!("You cancelled");
+            }
         }
-        // if let Result(selection) = selection {
-        // }
         Ok(())
     }
 }
@@ -306,7 +315,7 @@ fn run() -> Result<()> {
             if sub_m.value_of("text-resolution").is_some() {
                 screen_resolution.set_current_mode(sub_m.value_of("resolution").unwrap(), display)
             } else if sub_m.is_present("interactive-resolution") {
-                screen_resolution.set_from_list_modes(true, display)
+                screen_resolution.set_from_list_modes(false, display)
             } else {
                 Err("Not a valid option".into())
             }
