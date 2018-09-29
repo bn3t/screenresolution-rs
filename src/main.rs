@@ -220,18 +220,19 @@ impl ScreenResolution {
         //let selections_as_str = selections.into_iter().map(|sel| -> sel.as_str()).collect();
 
         let selection = Select::new()
-            .item(">>>>   Cancel")
+            //.item(">>>>   Cancel")
             .items(&selections_as_str.as_slice())
-            .interact()
+            .interact_opt()
             .unwrap();
-        if selection > 0 {
-            println!("Setting mode {}", set_strings[selection - 1]);
-            self.set_current_mode(set_strings[selection - 1].as_str(), display_index)?;
-        } else {
-            println!("You cancelled");
+        match selection {
+            Some(selection) => {
+                println!("Setting mode {}", set_strings[selection]);
+                self.set_current_mode(set_strings[selection].as_str(), display_index)?;
+            }
+            _ => {
+                println!("You cancelled");
+            }
         }
-        // if let Result(selection) = selection {
-        // }
         Ok(())
     }
 }
