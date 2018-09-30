@@ -222,6 +222,7 @@ impl ScreenResolution {
         let selection = Select::new()
             //.item(">>>>   Cancel")
             .items(&selections_as_str.as_slice())
+            .default(0)
             .interact_opt()
             .unwrap();
         match selection {
