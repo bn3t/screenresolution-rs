@@ -116,6 +116,7 @@ impl ScreenResolution {
         )
     }
 
+    /// Do the actual display configuration with the specified mode on the spcified display_id.
     fn configure_display(cgmode: &CGDisplayMode, display_id: CGDirectDisplayID) -> Result<()> {
         let display = CGDisplay::new(display_id);
         let config_ref = convert_result(display.begin_configuration())
@@ -141,21 +142,21 @@ impl ScreenResolution {
         Ok(())
     }
 
-    // Return true if the current mode is different from specified mode
+    /// Return true if the current mode is different from specified mode
     fn verify_current(
         &self,
         mode: &Mode,
         display_index: DisplayIndex,
         _display_id: CGDirectDisplayID,
     ) -> bool {
-        !self
-            .modes
+        self.modes
             .iter()
             .filter(|&m| m.current && m.display == display_index && mode == m)
             .next()
-            .is_some()
+            .is_none()
     }
 
+    /// Set the specified current mode for the specied display.
     pub fn set_current_mode(&self, mode: &str, display_index: DisplayIndex) -> Result<()> {
         println!("Setting mode: {}, display: {}", mode, display_index);
         let wanted_mode = ScreenResolution::parse_wanted_mode(mode, display_index)
