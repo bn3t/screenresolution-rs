@@ -6,9 +6,11 @@ description = "Allows to list, get and set screen resolutions."
 
 [dependencies]
 libc = "0.2"
-core-graphics = { git = "https://github.com/bn3t/core-foundation-rs.git", branch = "cgdisplaymode-extensions" }
+core-graphics = "0.17.2"
+# core-graphics = { git = "https://github.com/bn3t/core-foundation-rs.git", branch = "cgdisplaymode-extensions" }
 # core-graphics = { path="../core-foundation-rs/core-graphics" }
-core-foundation = { git = "https://github.com/bn3t/core-foundation-rs.git", branch = "cgdisplaymode-extensions" }
+core-foundation = "0.6.2"
+# core-foundation = { git = "https://github.com/bn3t/core-foundation-rs.git", branch = "cgdisplaymode-extensions" }
 # core-foundation =  { path="../core-foundation-rs/core-foundation" }
 foreign-types = "0.3.0"
 clap = "2.32.0"
