@@ -13,7 +13,7 @@ impl error::Error for CGError {
         "a CG error"
     }
 
-    fn cause(&self) -> Option<&error::Error> {
+    fn cause(&self) -> Option<&dyn error::Error> {
         None
     }
 }
@@ -31,7 +31,7 @@ impl From<base::CGError> for CGError {
 }
 
 // Create the Error, ErrorKind, ResultExt, and Result types
-error_chain!{
+error_chain! {
     foreign_links {
         CgError(CGError);
         IoError(::std::io::Error);

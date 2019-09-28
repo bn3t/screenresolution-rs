@@ -84,11 +84,11 @@ impl ScreenResolution {
             )
     }
 
-    pub fn print_current_mode(&self, long: bool, output: &mut io::Write) -> Result<()> {
+    pub fn print_current_mode(&self, long: bool, output: &mut dyn io::Write) -> Result<()> {
         let current_modes: Vec<&Mode> = self.modes.iter().filter(|&mode| mode.current).collect();
         for mode in current_modes {
             mode.print_mode(long, output)?;
-            writeln!(output, "");
+            writeln!(output, "").chain_err(|| "Could not print")?;
         }
         Ok(())
     }
@@ -197,7 +197,7 @@ impl ScreenResolution {
         )
     }
 
-    pub fn list_modes(&self, long: bool, output: &mut io::Write) -> Result<()> {
+    pub fn list_modes(&self, long: bool, output: &mut dyn io::Write) -> Result<()> {
         for mode in self.modes.iter() {
             mode.print_mode(long, output)
                 .chain_err(|| "Could not list modes")?;
@@ -258,7 +258,8 @@ fn run() -> Result<()> {
                         .required(false)
                         .takes_value(false),
                 ),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("get")
                 .about("Get current active resution for current display")
                 .arg(
@@ -269,7 +270,8 @@ fn run() -> Result<()> {
                         .required(false)
                         .takes_value(false),
                 ),
-        ).subcommand(
+        )
+        .subcommand(
             SubCommand::with_name("set")
                 .about("Set current active resolution for current display")
                 .arg(
@@ -278,24 +280,28 @@ fn run() -> Result<()> {
                         .value_name("DISPLAY")
                         .short("d")
                         .takes_value(true),
-                ).arg(
+                )
+                .arg(
                     Arg::with_name("text-resolution")
                         .value_name("RESOLUTION")
                         .help("Resolution string in the form of WxHxP@R (e.g.: 1920x1200x32@0)")
                         .required(false)
                         .takes_value(true),
-                ).arg(
+                )
+                .arg(
                     Arg::with_name("interactive-resolution")
                         .long("interactive")
                         .short("i")
                         .help("Will allow to choose resolution interactively")
                         .required(false),
-                ).group(
+                )
+                .group(
                     ArgGroup::with_name("resolution")
                         .args(&["text-resolution", "interactive-resolution"])
                         .required(true),
                 ),
-        ).get_matches();
+        )
+        .get_matches();
 
     let screen_resolution = ScreenResolution::new()?;
     match matches.subcommand() {

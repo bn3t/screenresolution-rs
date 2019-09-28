@@ -58,7 +58,7 @@ impl Mode {
         }
     }
 
-    fn print_short(&self, output: &mut io::Write) -> Result<()> {
+    fn print_short(&self, output: &mut dyn io::Write) -> Result<()> {
         let hidpi = if self.is_hdpi() { "HiDPI" } else { "" };
         let screen_format = match self.screen_format() {
             ScreenFormat::F16_9 => "16:9",
@@ -83,11 +83,12 @@ impl Mode {
             mode_pixel,
             hidpi,
             screen_format
-        ).chain_err(|| "Could not print long")?;
+        )
+        .chain_err(|| "Could not print long")?;
         Ok(())
     }
 
-    fn print_long(&self, output: &mut io::Write) -> Result<()> {
+    fn print_long(&self, output: &mut dyn io::Write) -> Result<()> {
         let hidpi = if self.is_hdpi() { "HiDPI" } else { "" };
         let screen_format = match self.screen_format() {
             ScreenFormat::F16_9 => "16:9",
@@ -106,11 +107,12 @@ impl Mode {
             self.io_flags,
             hidpi,
             screen_format
-        ).chain_err(|| "Could not print long")?;
+        )
+        .chain_err(|| "Could not print long")?;
         Ok(())
     }
 
-    pub fn print_mode(&self, long: bool, output: &mut io::Write) -> Result<()> {
+    pub fn print_mode(&self, long: bool, output: &mut dyn io::Write) -> Result<()> {
         match long {
             false => self.print_short(output)?,
             true => self.print_long(output)?,
