@@ -12,6 +12,8 @@ extern crate regex;
 use regex::Regex;
 use std::io;
 
+use std::ptr;
+
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
@@ -53,7 +55,20 @@ impl ScreenResolution {
                 .into_iter()
                 .for_each(|cgmode| {
                     let io_flags = cgmode.io_flags();
-                    if (io_flags & (kDisplayModeValidFlag | kDisplayModeSafeFlag)) != 0 {
+                    println!(
+                        "mode: 0x{:X} {}x{} - {}x{} - {} - {} - {} - {} - {}",
+                        io_flags,
+                        cgmode.width(),
+                        cgmode.height(),
+                        cgmode.pixel_width(),
+                        cgmode.pixel_height(),
+                        cgmode.pixel_encoding().to_string(),
+                        cgmode.refresh_rate(),
+                        cgmode.bit_depth(),
+                        cgmode.io_display_mode_id(),
+                        cgmode.is_usable_for_desktop_gui()
+                    );
+                    if (io_flags & (kDisplayModeValidFlag | kDisplayModeSafeFlag)) != 0 && cgmode.is_usable_for_desktop_gui() {
                         let mut mode = Mode::from(i as DisplayIndex, cgmode);
                         mode.current = mode == current_display_mode;
                         modes.push(mode);
