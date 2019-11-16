@@ -12,8 +12,6 @@ extern crate regex;
 use regex::Regex;
 use std::io;
 
-use std::ptr;
-
 use core_foundation::base::TCFType;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
@@ -56,19 +54,22 @@ impl ScreenResolution {
                 .for_each(|cgmode| {
                     let io_flags = cgmode.io_flags();
                     println!(
-                        "mode: 0x{:X} {}x{} - {}x{} - {} - {} - {} - {} - {}",
+                        "mode: 0x{:X} {}x{}@{} - {}x{} - {} - {} - {} - {}",
                         io_flags,
                         cgmode.width(),
                         cgmode.height(),
+                        cgmode.refresh_rate(),
                         cgmode.pixel_width(),
                         cgmode.pixel_height(),
                         cgmode.pixel_encoding().to_string(),
-                        cgmode.refresh_rate(),
                         cgmode.bit_depth(),
                         cgmode.io_display_mode_id(),
                         cgmode.is_usable_for_desktop_gui()
                     );
-                    if (io_flags & (kDisplayModeValidFlag | kDisplayModeSafeFlag)) != 0 && cgmode.is_usable_for_desktop_gui() {
+                    let _is = cgmode.is_usable_for_desktop_gui();
+                    if (io_flags & (kDisplayModeValidFlag | kDisplayModeSafeFlag)) != 0 && _is
+                    // && cgmode.is_usable_for_desktop_gui()
+                    {
                         let mut mode = Mode::from(i as DisplayIndex, cgmode);
                         mode.current = mode == current_display_mode;
                         modes.push(mode);
@@ -80,6 +81,7 @@ impl ScreenResolution {
                 .cmp(&(b.display))
                 .then(a.width.cmp(&(b.width)).reverse())
                 .then(a.height.cmp(&(b.height)).reverse())
+                .then(a.refresh_rate.partial_cmp(&(b.refresh_rate)).unwrap())
         });
 
         Ok(ScreenResolution { displays, modes })
@@ -188,8 +190,23 @@ impl ScreenResolution {
                     .next();
 
                 if let Some(index) = possible_index {
-                    let cgmode = &self.modes.get(index).unwrap().cgmode.as_ref();
-                    ScreenResolution::configure_display(cgmode.unwrap(), display_id)
+                    let cgmode = &self.modes.get(index).unwrap().cgmode.as_ref().unwrap();
+                    let io_flags = cgmode.io_flags();
+                    println!(
+                        "mode: 0x{:X} {}x{}@{} - {}x{} - {} - {} - {} - {}",
+                        io_flags,
+                        cgmode.width(),
+                        cgmode.height(),
+                        cgmode.refresh_rate(),
+                        cgmode.pixel_width(),
+                        cgmode.pixel_height(),
+                        cgmode.pixel_encoding().to_string(),
+                        cgmode.bit_depth(),
+                        cgmode.io_display_mode_id(),
+                        cgmode.is_usable_for_desktop_gui()
+                    );
+
+                    ScreenResolution::configure_display(cgmode, display_id)
                         .chain_err(|| "Could not actually configure display")?;
                 }
                 Ok(())
